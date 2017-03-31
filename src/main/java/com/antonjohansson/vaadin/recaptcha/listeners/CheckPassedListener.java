@@ -18,7 +18,6 @@ package com.antonjohansson.vaadin.recaptcha.listeners;
 /**
  * Listens for when the reCAPTCHA check is passed.
  */
-@FunctionalInterface
 public interface CheckPassedListener
 {
     /**

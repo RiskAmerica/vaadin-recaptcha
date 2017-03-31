@@ -19,7 +19,6 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Optional;
 
 import com.antonjohansson.vaadin.recaptcha.listeners.CheckPassedListener;
 import com.antonjohansson.vaadin.recaptcha.listeners.PassedCheckExpiredListener;
@@ -30,6 +29,8 @@ import com.antonjohansson.vaadin.recaptcha.shared.RecaptchaState;
 import com.vaadin.annotations.JavaScript;
 import com.vaadin.server.VaadinService;
 import com.vaadin.ui.AbstractJavaScriptComponent;
+import com.vaadin.ui.JavaScriptFunction;
+import elemental.json.JsonArray;
 
 /**
  * A Google reCAPTCHA v2 component.
@@ -43,7 +44,7 @@ public class Recaptcha extends AbstractJavaScriptComponent
     private final Collection<PassedCheckExpiredListener> passedCheckExpiredListeners = new ArrayList<>();
     private String secretKey;
     private String verifyURL;
-    private Optional<Boolean> verified = Optional.empty();
+    private Boolean verified;
 
     /**
      * Constructs a new, empty {@link Recaptcha} with the default verify URL.
@@ -78,14 +79,25 @@ public class Recaptcha extends AbstractJavaScriptComponent
         setSiteKey(siteKey);
         setSecretKey(secretKey);
         setVerifyURL(verifyURL);
-        addFunction("setResponse", arguments ->
+        addFunction("setResponse", new JavaScriptFunction()
         {
-            checkResponse(arguments.asString());
+            @Override
+            public void call(JsonArray jsonArray)
+            {
+                checkResponse(jsonArray.asString());
+            }
         });
-        addFunction("expired", arguments ->
+        addFunction("expired", new JavaScriptFunction()
         {
-            verified = Optional.empty();
-            passedCheckExpiredListeners.forEach(PassedCheckExpiredListener::onPassedCheckExpired);
+            @Override
+            public void call(JsonArray jsonArray)
+            {
+                verified = null;
+                for(PassedCheckExpiredListener listener:passedCheckExpiredListeners)
+                {
+                    listener.onPassedCheckExpired();
+                }
+            }
         });
     }
 
@@ -210,21 +222,26 @@ public class Recaptcha extends AbstractJavaScriptComponent
         return (RecaptchaState) super.getState();
     }
 
+    /**
+     * 
+     * @param response
+     */
     private void checkResponse(String response)
     {
-        if (verified.isPresent())
+        if (verified !=null)
         {
             throw new IllegalStateException("The response is already checked");
         }
 
         String remoteAddress = VaadinService.getCurrentRequest().getRemoteAddr();
         RecaptchaVerifier verifier = new RecaptchaVerifier(secretKey, response, verifyURL, remoteAddress);
-        boolean verified = verifier.isVerified();
-        this.verified = Optional.of(verified);
-
+        this.verified = verifier.isVerified();
         if (verified)
         {
-            checkPassedListeners.forEach(CheckPassedListener::onCheckPassed);
+            for(CheckPassedListener listener:checkPassedListeners)
+            {
+                listener.onCheckPassed();
+            }
         }
     }
 
@@ -233,7 +250,7 @@ public class Recaptcha extends AbstractJavaScriptComponent
      */
     public void reset()
     {
-        verified = Optional.empty();
+        verified = null;
         callFunction("reset");
     }
 
@@ -244,6 +261,6 @@ public class Recaptcha extends AbstractJavaScriptComponent
      */
     public boolean isVerified()
     {
-        return verified.orElse(false);
+        return verified!=null?verified:false;
     }
 }
